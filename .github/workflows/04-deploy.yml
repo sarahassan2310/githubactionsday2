@@ -43,9 +43,23 @@ jobs:
             -p $APP_PORT:8000 \
             ${{ steps.account.outputs.account_id }}.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:$IMAGE_TAG
 
+      # 🔍 DEBUG STEP 1
+      - name: Show running containers
+        run: docker ps -a
+
+      # 🔍 DEBUG STEP 2
+      - name: Show container logs
+        run: docker logs $CONTAINER_NAME || true
+
+      # ⏳ wait for app to start
+      - name: Wait for app startup
+        run: sleep 5
+
+      # 🧪 Smoke test
       - name: Smoke test
         run: curl --fail http://127.0.0.1:$APP_PORT/health
 
+      # 🧹 Cleanup
       - name: Cleanup
         if: always()
         run: docker rm -f $CONTAINER_NAME || true
