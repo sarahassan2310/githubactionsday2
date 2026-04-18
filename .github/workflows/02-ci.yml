@@ -76,11 +76,3 @@ jobs:
           ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
           docker push $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:$IMAGE_TAG
 
-      # ================= STATUS CHECK =================
-      - name: Set status success
-        if: success()
-        run: echo "CI + Build Succeeded ✅"
-
-      - name: Set status failure
-        if: failure()
-        run: echo "CI + Build Failed ❌"
