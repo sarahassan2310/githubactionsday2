@@ -2,50 +2,48 @@ name: 04 Deploy Workflow
 
 on:
   workflow_run:
-    workflows: ["03 Build Artifact Workflow"]
+    workflows: ["03 Build Workflow"]
     types: [completed]
 
 env:
-  IMAGE_NAME: tiny-health-app
-  IMAGE_TAR: tiny-health-app.tar
-  ARTIFACT_NAME: tiny-health-app-image
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: tiny-health-app
+  IMAGE_TAG: latest
   CONTAINER_NAME: tiny-health-container
   APP_PORT: "8000"
 
-permissions:
-  actions: read
-  contents: read
-
 jobs:
-  deploy-package:
-    # only run if build succeeded
+  deploy:
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
-
     runs-on: ubuntu-latest
 
     steps:
-      - name: Download artifact from BUILD workflow
-        uses: actions/download-artifact@v4
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          name: ${{ env.ARTIFACT_NAME }}
-          github-token: ${{ github.token }}
-          repository: ${{ github.repository }}
-          run-id: ${{ github.event.workflow_run.id }}
-          path: downloaded-artifact
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
 
-      - name: Load Docker image
-        run: docker load --input "downloaded-artifact/${IMAGE_TAR}"
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Start container
+      - name: Pull image from ECR
         run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          docker pull $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:$IMAGE_TAG
+
+      - name: Run container
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
           docker run -d \
-            --name "${CONTAINER_NAME}" \
-            -p "${APP_PORT}:8000" \
-            "${IMAGE_NAME}:latest"
+            --name $CONTAINER_NAME \
+            -p $APP_PORT:8000 \
+            $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:$IMAGE_TAG
 
       - name: Smoke test
-        run: curl --fail http://127.0.0.1:${APP_PORT}/health
+        run: curl --fail http://127.0.0.1:$APP_PORT/health
 
-      - name: Stop container
+      - name: Cleanup
         if: always()
-        run: docker rm -f "${CONTAINER_NAME}" || true
+        run: docker rm -f $CONTAINER_NAME || true
