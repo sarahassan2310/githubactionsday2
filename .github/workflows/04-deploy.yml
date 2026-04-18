@@ -7,7 +7,7 @@ on:
 
 env:
   AWS_REGION: us-east-1
-  ECR_REPOSITORY: tiny-health-app
+  ECR_REPOSITORY: githubactions-demo
   IMAGE_TAG: latest
   CONTAINER_NAME: tiny-health-container
   APP_PORT: "8000"
