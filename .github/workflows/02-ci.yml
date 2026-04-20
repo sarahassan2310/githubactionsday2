@@ -62,17 +62,28 @@ jobs:
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
+      - name: Set image variables
+        run: |
+          echo "ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)" >> $GITHUB_ENV
+          echo "IMAGE_SHA=${GITHUB_SHA::7}" >> $GITHUB_ENV
+
       - name: Build Docker image
-        run: docker build -t $ECR_REPOSITORY:$IMAGE_TAG .
-
-      - name: Tag image for ECR
         run: |
-          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-          docker tag $ECR_REPOSITORY:$IMAGE_TAG \
-          $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:$IMAGE_TAG
+          docker build -t $ECR_REPOSITORY:latest .
 
-      - name: Push image to ECR
+      - name: Tag Docker image (multi-tag)
         run: |
-          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-          docker push $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:$IMAGE_TAG
+          docker tag $ECR_REPOSITORY:latest \
+            $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:latest
 
+          docker tag $ECR_REPOSITORY:latest \
+            $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:$IMAGE_SHA
+
+          docker tag $ECR_REPOSITORY:latest \
+            $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:${GITHUB_RUN_NUMBER}
+
+      - name: Push Docker image (all tags)
+        run: |
+          docker push $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:latest
+          docker push $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:$IMAGE_SHA
+          docker push $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:${GITHUB_RUN_NUMBER}
