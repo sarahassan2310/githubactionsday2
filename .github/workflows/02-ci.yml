@@ -1,11 +1,14 @@
-name: 02 CI Workflow
+name: CI + Build Workflow
 
 on:
   push:
+    branches:
+      - main
     paths:
       - "app/**"
       - "tests/**"
-      - ".github/workflows/02-ci.yml"
+      - "Dockerfile"
+      - ".github/workflows/ci-build.yml"
 
   pull_request:
     branches:
@@ -14,17 +17,24 @@ on:
     paths:
       - "app/**"
       - "tests/**"
-      - ".github/workflows/02-ci.yml"
+      - "Dockerfile"
+      - ".github/workflows/ci-build.yml"
 
   workflow_dispatch:
 
+env:
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: githubactions-demo
+  IMAGE_TAG: latest
+
 jobs:
-  run-tests:
+  verify-and-build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v6
+      # ================= CI PART =================
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -33,3 +43,47 @@ jobs:
 
       - name: Run tests
         run: python -m unittest discover -s tests -v
+
+      - name: Run Trivy security scan
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          scan-type: fs
+          severity: HIGH,CRITICAL
+          exit-code: 1
+
+      # ================= BUILD PART =================
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set image variables
+        run: |
+          echo "ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)" >> $GITHUB_ENV
+          echo "IMAGE_SHA=${GITHUB_SHA::7}" >> $GITHUB_ENV
+
+      - name: Build Docker image
+        run: |
+          docker build -t $ECR_REPOSITORY:latest .
+
+      - name: Tag Docker image (multi-tag)
+        run: |
+          docker tag $ECR_REPOSITORY:latest \
+            $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:latest
+
+          docker tag $ECR_REPOSITORY:latest \
+            $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:$IMAGE_SHA
+
+          docker tag $ECR_REPOSITORY:latest \
+            $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:${GITHUB_RUN_NUMBER}
+
+      - name: Push Docker image (all tags)
+        run: |
+          docker push $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:latest
+          docker push $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:$IMAGE_SHA
+          docker push $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:${GITHUB_RUN_NUMBER}
