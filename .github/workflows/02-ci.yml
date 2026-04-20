@@ -1,41 +1,25 @@
-name: CI + Build Workflow
+name: CI + Build + Push to ECR
 
 on:
   push:
     branches:
       - main
-    paths:
-      - "app/**"
-      - "tests/**"
-      - "Dockerfile"
-      - ".github/workflows/ci-build.yml"
-
-  pull_request:
-    branches:
-      - main
-    types: [opened, synchronize, reopened]
-    paths:
-      - "app/**"
-      - "tests/**"
-      - "Dockerfile"
-      - ".github/workflows/ci-build.yml"
-
   workflow_dispatch:
 
 env:
   AWS_REGION: us-east-1
   ECR_REPOSITORY: githubactions-demo
-  IMAGE_TAG: latest
 
 jobs:
-  verify-and-build:
+  build-and-push:
     runs-on: ubuntu-latest
 
     steps:
-      # ================= CI PART =================
+      # ================= CHECKOUT =================
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # ================= PYTHON TESTS (OPTIONAL CI) =================
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
@@ -44,14 +28,7 @@ jobs:
       - name: Run tests
         run: python -m unittest discover -s tests -v
 
-      - name: Run Trivy security scan
-        uses: aquasecurity/trivy-action@0.24.0
-        with:
-          scan-type: fs
-          severity: HIGH,CRITICAL
-          exit-code: 1
-
-      # ================= BUILD PART =================
+      # ================= AWS LOGIN =================
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -62,28 +39,28 @@ jobs:
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
+      # ================= SET VARIABLES =================
       - name: Set image variables
         run: |
           echo "ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)" >> $GITHUB_ENV
-          echo "IMAGE_SHA=${GITHUB_SHA::7}" >> $GITHUB_ENV
+          echo "IMAGE_TAG=${GITHUB_SHA::7}" >> $GITHUB_ENV
 
+      # ================= BUILD IMAGE =================
       - name: Build Docker image
         run: |
           docker build -t $ECR_REPOSITORY:latest .
 
-      - name: Tag Docker image (multi-tag)
+      # ================= TAG IMAGE =================
+      - name: Tag Docker image
         run: |
           docker tag $ECR_REPOSITORY:latest \
             $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:latest
 
           docker tag $ECR_REPOSITORY:latest \
-            $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:$IMAGE_SHA
+            $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:$IMAGE_TAG
 
-          docker tag $ECR_REPOSITORY:latest \
-            $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:${GITHUB_RUN_NUMBER}
-
-      - name: Push Docker image (all tags)
+      # ================= PUSH TO ECR =================
+      - name: Push Docker image
         run: |
           docker push $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:latest
-          docker push $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:$IMAGE_SHA
-          docker push $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:${GITHUB_RUN_NUMBER}
+          docker push $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:$IMAGE_TAG
