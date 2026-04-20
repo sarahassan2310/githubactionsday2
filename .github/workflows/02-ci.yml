@@ -58,6 +58,7 @@ jobs:
 
           docker tag $ECR_REPOSITORY:latest \
             $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:$IMAGE_TAG
+  
 
       # ================= PUSH TO ECR =================
       - name: Push Docker image
