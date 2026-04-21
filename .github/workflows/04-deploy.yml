@@ -47,7 +47,7 @@ jobs:
         run: |
           ssh -i ~/.ssh/key.pem ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} \
           "docker run -d --name tiny-health-container -p 8000:8000 \
-          <ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/githubactions-demo:latest"
+          011122071814.dkr.ecr.us-east-1.amazonaws.com/githubactions-demo:latest"
 
       - name: Cleanup Images
         run: |
