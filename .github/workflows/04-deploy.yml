@@ -26,12 +26,12 @@ jobs:
         run: |
           ssh -i ~/.ssh/key.pem ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} \
           "aws ecr get-login-password --region us-east-1 | \
-          docker login --username AWS --password-stdin <ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com"
+          docker login --username AWS --password-stdin 011122071814.dkr.ecr.us-east-1.amazonaws.com"
 
       - name: Pull Docker Image
         run: |
           ssh -i ~/.ssh/key.pem ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} \
-          "docker pull <ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/githubactions-demo:latest"
+          "docker pull 011122071814.dkr.ecr.us-east-1.amazonaws.com/githubactions-demo:latest"
 
       - name: Stop Old Container
         run: |
